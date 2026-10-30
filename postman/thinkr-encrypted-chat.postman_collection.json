@@ -1,0 +1,96 @@
+{
+  "info": {
+    "name": "Thinkr encrypted chat",
+    "description": "A chat in three steps. Start the local bridge first with `npx @thinkr/sdk serve`. Step 1 encrypts on this machine, step 2 sends only ciphertext to the API, and step 3 decrypts the answer on this machine. Put your API key in the variable api_key, in its Current value.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{api_key}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "api_key", "value": "", "type": "string" },
+    { "key": "bridge", "value": "http://127.0.0.1:4141/v1", "type": "string" },
+    { "key": "api", "value": "https://api.thinkr.sh/v1", "type": "string" },
+    { "key": "id", "value": "", "type": "string" },
+    { "key": "encrypted_body", "value": "", "type": "string" },
+    { "key": "encapsulated_key", "value": "", "type": "string" },
+    { "key": "model", "value": "", "type": "string" },
+    { "key": "enclave_url", "value": "", "type": "string" },
+    { "key": "nonce", "value": "", "type": "string" },
+    { "key": "ciphertext", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "1. Encrypt on this machine",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const chat = pm.response.json();",
+              "pm.collectionVariables.set('id', chat.id);",
+              "pm.collectionVariables.set('encrypted_body', chat.body);",
+              "pm.collectionVariables.set('encapsulated_key', chat.headers['Ehbp-Encapsulated-Key']);",
+              "pm.collectionVariables.set('model', chat.headers['X-Tinfoil-Model']);",
+              "pm.collectionVariables.set('enclave_url', chat.headers['X-Tinfoil-Enclave-Url']);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"gpt-oss-120b\",\n  \"messages\": [{ \"role\": \"user\", \"content\": \"Explain a trusted execution environment in one sentence.\" }]\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{bridge}}/encrypt"
+      }
+    },
+    {
+      "name": "2. Send the ciphertext to the API",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const answer = pm.response.json();",
+              "pm.collectionVariables.set('nonce', answer.nonce);",
+              "pm.collectionVariables.set('ciphertext', answer.ciphertext);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Ehbp-Encapsulated-Key", "value": "{{encapsulated_key}}" },
+          { "key": "X-Tinfoil-Model", "value": "{{model}}" },
+          { "key": "X-Tinfoil-Enclave-Url", "value": "{{enclave_url}}" },
+          { "key": "X-Thinkr-Body-Encoding", "value": "base64url" }
+        ],
+        "body": { "mode": "raw", "raw": "{{encrypted_body}}" },
+        "url": "{{api}}/chat/completions"
+      }
+    },
+    {
+      "name": "3. Decrypt on this machine",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"{{id}}\",\n  \"nonce\": \"{{nonce}}\",\n  \"ciphertext\": \"{{ciphertext}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{bridge}}/decrypt"
+      }
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "name": "@thinkr/sdk",
+  "version": "0.1.0",
+  "description": "An OpenAI client for Thinkr Inference: it verifies the enclave of the private lane and encrypts each request to it.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thinkrsh/thinkr-sdk.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "thinkr-sdk": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "postman"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "prepublishOnly": "npm run check && npm run build",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test"
+  },
+  "dependencies": {
+    "@thinkr/verifier": "file:../verifier",
+    "openai": "7.45.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@panva/hpke-noble": "1.1.7",
+    "@types/node": "22.20.5",
+    "ehbp": "0.4.1",
+    "eslint": "10.13.0",
+    "globals": "17.13.0",
+    "hpke": "1.1.7",
+    "prettier": "3.9.10",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.0",
+    "vitest": "5.0.5"
+  }
+}
