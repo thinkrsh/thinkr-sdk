@@ -12,6 +12,7 @@ import {
   jsonResponse,
   keyConfigProblem,
   manualClock,
+  recordingFetch,
 } from './fakes.js';
 import { TestEnclave, type EnclaveAnswer } from './testEnclave.js';
 
@@ -82,6 +83,51 @@ describe('createClient', () => {
     expect(deps.sealed[0]?.baseUrl).toBe(BASE_URL);
     expect(verifyCalls.count).toBe(1);
   });
+
+  it.each(['zdr/claude-sonnet-5.5', 'open/grok-4.5'])(
+    'sends a chat of %s as plain JSON, with no verification',
+    async (model) => {
+      const { fetch, seen } = recordingFetch([() => jsonResponse(chatCompletion('Hi there.'))]);
+      const verifyCalls = { count: 0 };
+      const deps: ClientDeps = {
+        verify: () => {
+          verifyCalls.count += 1;
+          return Promise.reject(new Error('A plain chat verifies nothing.'));
+        },
+        seal: () => {
+          throw new Error('A plain chat seals nothing.');
+        },
+        now: manualClock().now,
+      };
+      const ai = buildClient({ apiKey: API_KEY, baseURL: BASE_URL, fetch }, deps);
+
+      const completion = await ai.chat.completions.create({ model, messages: MESSAGES });
+
+      expect(completion.choices[0]?.message.content).toBe('Hi there.');
+      expect(verifyCalls.count).toBe(0);
+      const [sent] = seen;
+      expect(sent?.url).toBe(`${BASE_URL}/chat/completions`);
+      expect(sent?.headers.get('Authorization')).toBe(`Bearer ${API_KEY}`);
+      expect(sent?.headers.get('X-Tinfoil-Model')).toBeNull();
+      expect(
+        [...(sent?.headers.keys() ?? [])].some((name) => name.startsWith('x-stainless-')),
+      ).toBe(false);
+      expect(JSON.parse(sent?.body ?? '{}')).toEqual({ model, messages: MESSAGES });
+    },
+  );
+
+  it.each(['gpt-oss-120b', 'zdr', 'zdr-private/model', 'OPEN/model', 'private/zdr/model'])(
+    'keeps the id %j encrypted, since only the two prefixes go plain',
+    async (model) => {
+      const enclave = await TestEnclave.create([() => sealedJson(chatCompletion('Hi.'))]);
+      const deps = depsFor(enclave, { count: 0 });
+      const ai = buildClient({ apiKey: API_KEY, baseURL: BASE_URL, fetch: enclave.fetch }, deps);
+
+      await ai.chat.completions.create({ model, messages: MESSAGES });
+
+      expect(enclave.opened[0]?.headers.get('X-Tinfoil-Model')).toBe(model);
+    },
+  );
 
   it('streams a chat as the enclave sends it', async () => {
     const enclave = await TestEnclave.create([

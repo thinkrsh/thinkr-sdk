@@ -17,8 +17,9 @@ export interface ClientFetchDeps {
 
 /**
  * The fetch of the OpenAI client. A request with a body goes sealed to the verified enclave, with
- * the model of its body in the model header; a request with no body, such as the list of models,
- * goes as it is. Either goes only to the origin of the base URL, since it carries the API key.
+ * the model of its body in the model header, unless its model is of the modes ZDR or Open, which
+ * take plain JSON; a request with no body, such as the list of models, goes as it is. Each goes only
+ * to the origin of the base URL, since it carries the API key.
  */
 export function createClientFetch(deps: ClientFetchDeps): typeof fetch {
   const origin = new URL(deps.baseUrl).origin;
@@ -33,7 +34,16 @@ export function createClientFetch(deps: ClientFetchDeps): typeof fetch {
     if (body.length === 0) {
       return deps.send(target.href, { method: request.method, headers, signal: request.signal });
     }
-    headers.set(API.modelHeader, modelOf(body));
+    const model = modelOf(body);
+    if (isPlainModel(model)) {
+      return deps.send(target.href, {
+        method: request.method,
+        headers,
+        body,
+        signal: request.signal,
+      });
+    }
+    headers.set(API.modelHeader, model);
     const sendSealed = async (verification: Verification): Promise<Response> => {
       const sealedFetch = await deps.seal(verification);
       return sealedFetch(target.href, {
@@ -57,6 +67,11 @@ function keptHeaders(headers: Headers): Headers {
     if (!name.toLowerCase().startsWith(API.droppedHeaderPrefix)) kept.set(name, value);
   });
   return kept;
+}
+
+/** True for the id of a model of the modes ZDR or Open, which runs outside an enclave. */
+export function isPlainModel(model: string): boolean {
+  return API.plainModelPrefixes.some((prefix) => model.startsWith(prefix));
 }
 
 /** The model that a JSON body names. Throws for a body that is not JSON or names no model. */

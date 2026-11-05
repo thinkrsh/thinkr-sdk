@@ -1,7 +1,7 @@
 /**
- * The Inference API of Thinkr (decision 45; the owner, 29 Oct 2026): an OpenAI-compatible API for
- * the models of the private lane, which the credit on an API key pays. The paths and headers match
- * the Inference routes of the proxy of Thinkr.
+ * The Inference API of Thinkr (decision 45; the owner, 29 Oct 2026): an OpenAI-compatible API, which
+ * the credit on an API key pays, for the models of the private lane and, since 1 Nov 2026, of the
+ * modes ZDR and Open. The paths and headers match the Inference routes of the proxy of Thinkr.
  */
 export const API = {
   /** Where the SDK sends by default. This host passes `/v1/*` on to the proxy of Thinkr. */
@@ -20,6 +20,13 @@ export const API = {
   modelHeader: 'X-Tinfoil-Model',
   /** The field of a JSON body that names the model, as in the OpenAI API. */
   modelField: 'model',
+  /**
+   * What starts the id of a model of the modes ZDR and Open, which runs outside an enclave and takes
+   * plain JSON. Only the id that the caller wrote decides this, never an answer of the API, so no
+   * server can turn a chat of the private lane into a plain one. Every other id goes encrypted. Must
+   * match INFERENCE.modelPrefix in apps/proxy.
+   */
+  plainModelPrefixes: ['zdr/', 'open/'],
   /** The path of a chat under the base URL. */
   chatPath: '/chat/completions',
   /**

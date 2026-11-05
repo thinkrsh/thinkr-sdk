@@ -11,7 +11,7 @@ import { BRIDGE } from './config/bridge.js';
 import { ThinkrError } from './errors.js';
 import { isRecord } from './lib/json.js';
 import { checkApiKey } from './options.js';
-import { modelOf } from './sealing.js';
+import { isPlainModel, modelOf } from './sealing.js';
 
 /** What a tool sends to the API itself: the ciphertext of a chat, and where and how it goes. */
 export interface EncryptedChat {
@@ -70,6 +70,12 @@ export function createChatSteps(deps: ChatStepsDeps): ChatSteps {
     encrypt: async (apiKey, body) => {
       const secret = await deriveCacheSecret(checkApiKey(apiKey));
       const model = modelOf(body);
+      if (isPlainModel(model)) {
+        throw new ThinkrError(
+          'invalid_request',
+          `The model ${model} runs outside an enclave and takes plain JSON, so it has nothing to encrypt. Send the chat to ${baseChatPath(deps.baseUrl)}.`,
+        );
+      }
       const plaintext = chatWithCacheSecret(body, secret);
       const verification = await deps.verify();
       const sealed = await sealRequestBody(verification.hardware.hpkePublicKey, plaintext);
@@ -78,7 +84,7 @@ export function createChatSteps(deps: ChatStepsDeps): ChatSteps {
       waiting.set(id, { sealed, at: deps.now() });
       return {
         id,
-        url: `${deps.baseUrl}${API.chatPath}`,
+        url: baseChatPath(deps.baseUrl),
         headers: {
           ...sealed.headers,
           'Content-Type': 'application/json',
@@ -107,6 +113,10 @@ export function createChatSteps(deps: ChatStepsDeps): ChatSteps {
       return opened;
     },
   };
+}
+
+function baseChatPath(baseUrl: string): string {
+  return `${baseUrl}${API.chatPath}`;
 }
 
 /**

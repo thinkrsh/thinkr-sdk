@@ -34,10 +34,12 @@ const LIVE: ClientDeps = {
 };
 
 /**
- * An OpenAI client for Thinkr Inference. Before its first request with a body, it verifies the
+ * An OpenAI client for Thinkr Inference. Before its first chat of the private lane, it verifies the
  * enclave on this machine, and it verifies again once that verification is older than 15 minutes or
- * the enclave changed its key. It seals each request body to the key of the verified enclave, so
- * the proxy of Thinkr and every other server on the way see ciphertext only.
+ * the enclave changed its key. It seals each such request body to the key of the verified enclave,
+ * so the proxy of Thinkr and every other server on the way see ciphertext only. A model whose id
+ * starts with `zdr/` or `open/` runs outside an enclave, so its chat goes as plain JSON, with no
+ * verification, and the proxy reads it.
  */
 export function createClient(options: ClientOptions): OpenAI {
   return buildClient(options, LIVE);
@@ -51,8 +53,9 @@ export function buildClient(options: ClientOptions, deps: ClientDeps): OpenAI {
 }
 
 /**
- * The fetch under a client, for one API key: it verifies the enclave and seals each request body,
- * and so serves any caller of plain HTTP on this machine too, as the local bridge does.
+ * The fetch under a client, for one API key: it verifies the enclave and seals the request body of
+ * each chat of the private lane, and so serves any caller of plain HTTP on this machine too, as the
+ * local bridge does.
  */
 export function buildFetch(options: ClientOptions, deps: ClientDeps = LIVE): typeof fetch {
   const apiKey = checkApiKey(options.apiKey);

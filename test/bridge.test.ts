@@ -14,6 +14,7 @@ import {
   fakeVerification,
   jsonResponse,
   manualClock,
+  recordingFetch,
 } from './fakes.js';
 import { TestEnclave, type EnclaveAnswer } from './testEnclave.js';
 
@@ -99,6 +100,32 @@ describe('the bridge', () => {
     expect(opened?.headers.get('X-Tinfoil-Model')).toBe('gpt-oss-120b');
     expect(opened?.headers.get('Authorization')).toBe(`Bearer ${API_KEY}`);
     expect(JSON.parse(opened?.plaintext ?? '{}')).toMatchObject(CHAT_BODY);
+  });
+
+  it('passes a chat of ZDR on as plain JSON, and verifies nothing', async () => {
+    const enclave = await TestEnclave.create([]);
+    const { fetch, seen } = recordingFetch([() => jsonResponse(chatCompletion('Hi there.'))]);
+    const body = { model: 'zdr/claude-sonnet-5.5', messages: CHAT_BODY.messages };
+    const handler = createBridge({
+      baseUrl: BASE_URL,
+      send: fetch,
+      steps: stepsOn(enclave),
+      chatFetch: (apiKey) =>
+        buildFetch(
+          { apiKey, baseURL: BASE_URL, fetch },
+          {
+            ...clientDeps(enclave),
+            verify: () => Promise.reject(new Error('A plain chat verifies nothing.')),
+          },
+        ),
+    });
+
+    const response = await handler(chatRequest({ body: JSON.stringify(body) }));
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(seen[0]?.body ?? '{}')).toEqual(body);
+    expect(seen[0]?.headers.get('Authorization')).toBe(`Bearer ${API_KEY}`);
+    expect(seen[0]?.headers.get('X-Tinfoil-Model')).toBeNull();
   });
 
   it('sends nothing else that describes the machine of the caller', async () => {
@@ -378,6 +405,8 @@ describe('a chat in steps', () => {
     ['a stream', JSON.stringify({ ...CHAT_BODY, stream: true }), 'has no stream'],
     ['no model', '{"messages":[]}', 'must name its model'],
     ['no JSON', 'hello', 'must be JSON'],
+    ['a model of ZDR', JSON.stringify({ ...CHAT_BODY, model: 'zdr/x' }), 'takes plain JSON'],
+    ['a model of Open', JSON.stringify({ ...CHAT_BODY, model: 'open/x' }), 'takes plain JSON'],
   ])('encrypts nothing for %s', async (_name, body, message) => {
     const enclave = await TestEnclave.create([]);
     const response = await bridgeOn(enclave)(encryptRequest(body));

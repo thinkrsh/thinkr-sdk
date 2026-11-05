@@ -1,11 +1,14 @@
 # Thinkr SDK
 
-This package gives you an OpenAI client for Thinkr Inference. Before the client sends anything, it
-verifies the enclave on your machine. It then encrypts each request body to that enclave, so the
-proxy of Thinkr and every other server on the way see only ciphertext.
+This package gives you an OpenAI client for Thinkr Inference. For a model of the private lane, the
+client verifies the enclave on your machine before it sends anything. It then encrypts each request
+body to that enclave, so the proxy of Thinkr and every other server on the way see only ciphertext.
 
-The models are the open-weight models of the private lane. Your existing OpenAI code keeps working:
-the client takes the same calls, streaming included.
+The API also serves the models of the modes ZDR and Open, which run outside an enclave. Their ids
+start with `zdr/` or `open/`, and the client sends them as plain JSON. See
+[Call a model of ZDR or Open](#call-a-model-of-zdr-or-open).
+
+Your existing OpenAI code keeps working: the client takes the same calls, streaming included.
 
 ## Install
 
@@ -50,8 +53,36 @@ for await (const chunk of stream) {
 }
 ```
 
-`ai.models.list()` lists the models with their prices. To see the credit left on your key, call
-`await ai.get('/balance')`, which returns `{ usd }`.
+`ai.models.list()` lists the models with their modes and prices. To see the credit left on your
+key, call `await ai.get('/balance')`, which returns `{ usd }`.
+
+## Call a model of ZDR or Open
+
+A model whose id starts with `zdr/` or `open/` runs outside an enclave. The client sends its chat as
+plain JSON, with no verification, and encrypts every other id. Only the id that you write decides
+this, so no server can turn a chat of the private lane into a plain one.
+
+```ts
+const completion = await ai.chat.completions.create({
+  model: 'zdr/claude-sonnet-5.5',
+  messages: [{ role: 'user', content: 'Summarize this contract in three lines.' }],
+});
+```
+
+The proxy of Thinkr, OpenRouter, and the provider of the model can read such a chat. ZDR sends it
+only to providers under zero data retention. In Open, the provider may keep it for a while.
+
+These chats need no SDK. Any OpenAI client or HTTP tool can call `https://api.thinkr.sh/v1` directly
+with your API key:
+
+```sh
+curl https://api.thinkr.sh/v1/chat/completions \
+  -H "Authorization: Bearer $THINKR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "zdr/claude-sonnet-5.5", "messages": [{"role": "user", "content": "Hello"}]}'
+```
+
+A chat runs to its end even when your connection closes, and the key pays for the whole answer.
 
 ## How verification works
 
@@ -83,8 +114,9 @@ console.log(verification.enclaveHost, verification.releaseTag);
 
 ## Use Postman, curl, or another language
 
-A program that cannot encrypt calls the API through the local bridge of this package. The bridge
-runs on your machine, verifies the enclave, and encrypts each chat before it leaves. To start it:
+To call a model of the private lane, a program that cannot encrypt goes through the local bridge of
+this package. The bridge runs on your machine, verifies the enclave, and encrypts each chat before
+it leaves. To start it:
 
 ```sh
 npx @thinkr/sdk serve
@@ -101,8 +133,8 @@ curl http://127.0.0.1:4141/v1/chat/completions \
 ```
 
 The answer has the shape of the OpenAI API, and `"stream": true` streams it. The bridge also answers
-`GET /v1/models`, `GET /v1/attestation`, and `GET /v1/balance`. It refuses requests from web pages,
-and it keeps your key in memory only. If a verification fails, it answers `502` with the code
+`GET /v1/models`, `GET /v1/attestation`, and `GET /v1/balance`, and passes a chat of ZDR or Open on
+as plain JSON. It refuses requests from web pages, and it keeps your key in memory only. If a verification fails, it answers `502` with the code
 `verification_failed` and sends nothing.
 
 ### Send the ciphertext yourself

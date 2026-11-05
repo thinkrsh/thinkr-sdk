@@ -1,7 +1,7 @@
 {
   "name": "@thinkr/sdk",
-  "version": "0.1.0",
-  "description": "An OpenAI client for Thinkr Inference: it verifies the enclave of the private lane and encrypts each request to it.",
+  "version": "0.2.0",
+  "description": "An OpenAI client for Thinkr Inference: it verifies the enclave of the private lane and encrypts each request to it, and calls the models of ZDR and Open as plain JSON.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
